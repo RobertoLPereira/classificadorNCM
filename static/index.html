@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classificador NCM - Saneamento PDV</title>
+  <link rel="manifest" href="/static/manifest.json" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+    <header class="topbar">
+    <h1>Classificador NCM <span class="badge">Multi-PDV</span></h1>
+    <div id="conn-status" class="status disconnected">Desconectado</div>
+  </header>
+
+  <nav class="tabs-bar" style="background:#1f2937; padding:8px 24px; display:flex; gap:10px;">
+    <button type="button" class="tab-btn active btn-secondary" data-tab="classificacao">1. Classificação em Lote (PDV)</button>
+    <button type="button" class="tab-btn btn-secondary" data-tab="siscomex">2. Consultar NCM por Setor (Siscomex)</button>
+    <button type="button" class="tab-btn btn-secondary" data-tab="ajuda">3. Ajuda (Como Usar)</button>
+  </nav>
+
+  <main class="container" id="tab-classificacao">
+
+    <!-- PASSO 1: CONEXÃO COM O BANCO -->
+    <section class="card">
+      <div class="card-header">
+        <h2>1. Conexão com Banco de Dados</h2>
+        <div class="profile-controls">
+          <select id="saved-profiles">
+            <option value="">-- Perfis Salvos --</option>
+          </select>
+          <button type="button" id="btn-save-profile" class="btn-secondary">Salvar Perfil</button>
+          <button type="button" id="btn-del-profile" class="btn-danger-outline">Excluir</button>
+        </div>
+      </div>
+
+      <form id="form-connect" class="grid-form">
+        <label>
+          Banco (SGBD)
+          <select id="db-type">
+            <option value="mysql">MySQL / MariaDB</option>
+            <option value="postgresql">PostgreSQL</option>
+            <option value="sqlite">SQLite (Arquivo Local)</option>
+          </select>
+        </label>
+
+        <label class="server-field">
+          Host / IP
+          <input type="text" id="db-host" value="localhost" />
+        </label>
+
+        <label class="server-field">
+          Porta
+          <input type="number" id="db-port" value="3306" />
+        </label>
+
+        <label class="server-field">
+          Usuário
+          <input type="text" id="db-user" placeholder="root / postgres" />
+        </label>
+
+        <label class="server-field">
+          Senha
+          <input type="password" id="db-pass" />
+        </label>
+
+        <label>
+          <span id="lbl-database">Nome do Banco</span>
+          <input type="text" id="db-name" placeholder="ex: pdv_loja" required />
+        </label>
+
+        <label class="server-field">
+          Charset
+          <select id="db-charset">
+            <option value="utf8mb4">utf8mb4 (Padrão)</option>
+            <option value="latin1">latin1 (Legado)</option>
+          </select>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="btn-primary">Conectar e Listar Tabelas</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- PASSO 2: MAPEAMENTO DA TABELA E COLUNAS -->
+    <section id="section-mapping" class="card hidden">
+      <h2>2. Mapeamento da Tabela de Produtos</h2>
+
+      <div class="grid-form">
+        <label>
+          Tabela de Produtos
+          <select id="select-table">
+            <option value="">Selecione a tabela...</option>
+          </select>
+        </label>
+
+        <label>
+          Coluna Chave Primária (ID)
+          <select id="select-pk"></select>
+        </label>
+
+        <label>
+          Coluna Alvo do NCM (será atualizada)
+          <select id="select-target-ncm"></select>
+        </label>
+      </div>
+
+      <div class="columns-picker">
+        <p><strong>Selecione as colunas para exibir na grade:</strong></p>
+        <div id="columns-checkboxes" class="checkbox-grid"></div>
+      </div>
+    </section>
+
+    <!-- PASSO 3: FILTROS E CONSULTA -->
+    <section id="section-filters" class="card hidden">
+      <div class="card-header">
+        <h2>3. Filtros de Pesquisa (WHERE)</h2>
+        <div>
+          <label class="inline-label">
+            Combinar condições com:
+            <select id="filter-logic">
+              <option value="AND">E (AND - Todas verdadeiras)</option>
+              <option value="OR">OU (OR - Qualquer uma)</option>
+            </select>
+          </label>
+          <button type="button" id="btn-add-filter" class="btn-secondary">+ Adicionar Condição</button>
+        </div>
+      </div>
+      <div class="knowledge-bar" style="display:flex; gap:8px; margin-bottom:12px; background:#f0fdf4; padding:10px; border-radius:6px; border:1px solid #bbf7d0;">
+        <select id="select-knowledge" style="flex:1;">
+          <option value="">-- Aplicar Regra da Memória NCM --</option>
+        </select>
+        <button type="button" id="btn-use-knowledge" class="btn-success">Carregar Regra</button>
+        <button type="button" id="btn-save-knowledge" class="btn-secondary">Salvar Filtro + NCM na Memória</button>
+      </div>
+
+      <div id="filters-container" class="filters-list"></div>
+
+      <div class="search-bar-footer">
+        <label class="inline-label">
+          Limite de registros:
+          <input type="number" id="query-limit" value="200" min="1" max="5000" style="width: 90px;" />
+        </label>
+        <button type="button" id="btn-search" class="btn-primary">Pesquisar Produtos</button>
+      </div>
+    </section>
+
+    <!-- PASSO 4: RESULTADOS E ATUALIZAÇÃO EM LOTE -->
+    <section id="section-results" class="card hidden">
+      <div class="batch-toolbar">
+        <div class="batch-inputs">
+          <label>
+            Novo Código NCM (8 dígitos)
+            <input type="text" id="input-new-ncm" maxlength="10" placeholder="Ex: 1905.90.90" />
+          </label>
+
+          <label class="checkbox-inline">
+            <input type="checkbox" id="chk-format-dots" />
+            Salvar com pontos (0000.00.00)
+          </label>
+
+          <label>
+            Campo extra(Ex:<code>status=1</code>)
+            <input type="text" id="input-extra-field" placeholder="campo=valor" />
+          </label>
+        </div>
+
+        <div class="batch-action">
+          <span id="selected-counter">0 selecionados</span>
+          <button type="button" id="btn-apply-ncm" class="btn-success" disabled>
+            Aplicar NCM nos Marcados
+          </button>
+        </div>
+      </div>
+
+      <div class="table-wrapper">
+        <table id="results-table">
+          <thead id="results-thead"></thead>
+          <tbody id="results-tbody"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <main id="tab-siscomex" class="container hidden">
+  <section class="card">
+      <div class="card-header">
+        <h2>Consulta Oficial NCM (Portal Único Siscomex)</h2>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <a href="https://portalunico.siscomex.gov.br/classif/#/sumario?perfil=publico"
+             target="_blank" rel="noopener" class="btn-secondary" style="text-decoration:none;">
+            Baixar no Siscomex ↗
+          </a>
+          <button type="button" id="btn-import-siscomex" class="btn-primary">Importar JSON</button>
+          <input type="file" id="file-siscomex" accept=".json" class="hidden" />
+        </div>
+      </div>
+
+    <div class="grid-form" style="margin-bottom:12px;">
+      <label>
+        Setor do Supermercado
+        <select id="siscomex-sector">
+          <option value="">-- Todos os Capítulos --</option>
+        </select>
+      </label>
+
+      <label>
+        Descrição ou Código NCM
+        <input type="text" id="siscomex-query" placeholder="Ex: bolo, feijão, detergente..." />
+      </label>
+
+      <div class="form-actions">
+        <button type="button" id="btn-search-siscomex" class="btn-primary">Buscar na Tabela</button>
+      </div>
+    </div>
+
+    <p id="sector-hint" style="font-size:0.85rem; color:#4b5563; margin-bottom:12px;"></p>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:130px;">Código NCM</th>
+            <th>Descrição Oficial Siscomex</th>
+            <th style="width:120px;">Ação</th>
+          </tr>
+        </thead>
+        <tbody id="siscomex-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+  </main>
+    <!-- ABA 3: AJUDA PARA USUÁRIOS -->
+  <main id="tab-ajuda" class="container hidden">
+    <section class="card">
+      <h2>Guia Rápido: Como Classificar o NCM dos Produtos</h2>
+      <p style="color:#4b5563; line-height:1.6;">
+        Este programa serve para corrigir ou preencher o código <strong>NCM</strong> de vários produtos da sua loja de uma só vez, sem precisar abrir produto por produto no sistema do caixa.
+      </p>
+
+      <div style="background:#fef3c7; border:1px solid #f59e0b; padding:12px 16px; border-radius:6px; margin:16px 0; color:#92400e;">
+        <strong>Fique tranquilo:</strong> Antes de qualquer alteração, o programa salva automaticamente uma cópia de segurança na pasta <code>backups</code>. Se algo for alterado por engano, é possível recuperar os dados antigos.
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Passo 1: Conectar ao Sistema da Loja</h2>
+      <ol style="line-height:1.8; color:#374151; padding-left:20px;">
+        <li>Na primeira tela (<strong>1. Classificação em Lote</strong>), escolha um perfil já salvo em <strong>Perfis Salvos</strong> (se o técnico já deixou configurado) ou preencha os dados de acesso ao banco da loja.</li>
+        <li>Clique no botão azul <strong>Conectar e Listar Tabelas</strong>.</li>
+        <li>Quando der certo, a etiqueta no canto superior direito mudará de vermelha para verde (<strong>Conectado</strong>).</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Passo 2: Escolher a Lista de Produtos</h2>
+      <ol style="line-height:1.8; color:#374151; padding-left:20px;">
+        <li>Em <strong>Tabela de Produtos</strong>, escolha o cadastro onde ficam os itens da loja (geralmente tem nomes como <code>produtos</code>, <code>estoque</code> ou <code>cad_prod</code>).</li>
+        <li>Confira se a <strong>Coluna Alvo do NCM</strong> está apontando para o campo de NCM (o programa costuma marcar sozinho).</li>
+        <li>Nas caixinhas abaixo, deixe marcadas as informações que você quer ver na tela (por exemplo: código, descrição do produto e NCM atual).</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Passo 3: Filtrar Apenas os Produtos Desejados</h2>
+      <p style="color:#4b5563; line-height:1.6;">
+        Use os filtros para separar exatamente os produtos que usam o mesmo NCM, evitando misturar itens parecidos.
+      </p>
+      <div style="background:#f3f4f6; padding:12px 16px; border-radius:6px; margin:10px 0; line-height:1.6;">
+        <strong>Exemplo prático (Padaria):</strong><br />
+        • Linha 1: <code>Descrição</code> → <strong>CONTÉM</strong> → digite <code>bolo</code><br />
+        • Clique em <strong>+ Adicionar Condição</strong><br />
+        • Linha 2: <code>Descrição</code> → <strong>NÃO CONTÉM</strong> → digite <code>mistura</code><br />
+        <em>Resultado: O sistema mostra apenas os bolos prontos e esconde as misturas para bolo em pó.</em>
+      </div>
+      <p style="color:#374151;">Depois de montar o filtro, clique em <strong>Pesquisar Produtos</strong>.</p>
+    </section>
+
+    <section class="card">
+      <h2>Passo 4: Descobrir o Código NCM Correto (Se Não Souber)</h2>
+      <ol style="line-height:1.8; color:#374151; padding-left:20px;">
+        <li>Clique na aba superior <strong>2. Consultar NCM por Setor (Siscomex)</strong>.</li>
+        <li>Escolha o <strong>Setor do Supermercado</strong> (ex.: <em>Padaria, Bebidas, Limpeza, Açougue</em>).</li>
+        <li>Digite o nome do produto na busca (ex.: <code>refrigerante</code> ou <code>detergente</code>) e clique em <strong>Buscar na Tabela</strong>.</li>
+        <li>Ao encontrar a descrição certa na lista, clique no botão <strong>Usar NCM</strong>. O programa levará o código automaticamente de volta para a primeira tela.</li>
+      </ol>
+      <ol>Passo 4.1 Em caso de dúvidas, consulte o sitio oficial
+        <li>https://portalunico.siscomex.gov.br/classif/#/sumario?perfil=publico</li>
+        <li>Aqui você poderá realizar pesquisa para sanar suas dúvidas</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Passo 5: Aplicar o NCM nos Produtos Marcados</h2>
+      <ol style="line-height:1.8; color:#374151; padding-left:20px;">
+        <li>Na lista de produtos pesquisados, marque a caixinha ao lado de cada item que deve receber aquele NCM (ou marque a primeira caixinha no topo da tabela para selecionar todos de uma vez).</li>
+        <li>Confira se o número de 8 dígitos está preenchido em <strong>Novo Código NCM</strong>.</li>
+        <li><strong>Dica sobre pontos:</strong> Observe como os NCMs antigos aparecem na sua lista. Se estiverem com pontos (ex.: <code>1905.90.90</code>), marque a opção <strong>Salvar com pontos</strong>. Se estiverem sem pontos (ex.: <code>19059090</code>), deixe desmarcada.</li>
+        <li>Clique no botão verde <strong>Aplicar NCM nos Marcados</strong> e confirme a mensagem na tela.</li>
+      </ol>
+    </section>
+
+    <section class="card">
+      <h2>Dica Extra: Economize Tempo nos Próximos Produtos</h2>
+      <p style="color:#4b5563; line-height:1.6;">
+        Sempre que montar um bom filtro e escolher o NCM certo, clique em <strong>Salvar Filtro + NCM na Memória</strong>. Da próxima vez (ou em outra loja), basta escolher essa regra na lista verde e clicar em <strong>Carregar Regra</strong> que o sistema faz a busca sozinho.
+      </p>
+    </section>
+  </main>
+
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script type="module" src="/static/js/main.js"></script>
+</body>
+</html>

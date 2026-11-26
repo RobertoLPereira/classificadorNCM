@@ -1,0 +1,24 @@
+[
+  {
+    "id": "1795722891574",
+    "ncm": "1902.30.00",
+    "descricao_ncm": "MACARRAO",
+    "termos_incluir": [
+      "macarrao"
+    ],
+    "termos_excluir": [],
+    "usos": 2,
+    "atualizado_em": "2026-11-26 16:58:12"
+  },
+  {
+    "id": "1795723357207",
+    "ncm": "2103.90.21",
+    "descricao_ncm": "TEMPERO",
+    "termos_incluir": [
+      "tempero"
+    ],
+    "termos_excluir": [],
+    "usos": 1,
+    "atualizado_em": "2026-11-26 17:02:37"
+  }
+]

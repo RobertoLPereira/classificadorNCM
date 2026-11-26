@@ -1,0 +1,39 @@
+# Ambiente Virtual Python
+venv/
+.venv/
+env/
+ENV/
+
+# Cache e arquivos compilados do Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+
+# Artefatos de Build do PyInstaller
+build/
+dist/
+*.spec
+*.exe
+
+# Dados locais, backups e bases importadas (portáteis na pasta do .exe)
+backups/
+*.db
+*.sqlite
+*.sqlite3
+perfis_clientes.json
+config_clientes.json
+tabela_ncm_siscomex.json
+!static/tabela_ncm_siscomex.json
+
+# Arquivos de ambiente e logs
+.env
+.env.*
+*.log
+
+# IDEs e Sistemas Operacionais
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

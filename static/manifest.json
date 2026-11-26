@@ -1,0 +1,9 @@
+{
+  "name": "Classificador NCM Multi-PDV",
+  "short_name": "NCM PDV",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f6f9",
+  "theme_color": "#111827",
+  "icons": []
+}
